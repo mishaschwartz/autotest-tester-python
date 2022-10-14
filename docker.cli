@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+
+PYTHON_VERSIONS='3.7, 3.8, 3.9, 3.10'
+DEFAULT_PYTHON_VERSION='3.10'
+
+settings() {
+  sed -e "s/\"\$PYTHON_VERSIONS\$\"/${PYTHON_VERSIONS}/" -e "s/\"\$DEFAULT_PYTHON_VERSION\$\"/${DEFAULT_PYTHON_VERSION}/" "$(dirname "$0")/schema.json"
+}
+
+[ "$1" = "settings" ] && settings

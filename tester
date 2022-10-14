@@ -1,0 +1,210 @@
+#!/usr/bin/env python3
+
+import os
+import unittest
+import json
+from typing import TextIO, Tuple, Optional, Type, Dict, List
+from types import TracebackType
+import pytest
+import sys
+
+
+class TextTestResults(unittest.TextTestResult):
+    """
+    Custom unittest.TextTestResult that saves results as
+    a hash to self.results
+    """
+
+    def __init__(self, stream: TextIO, descriptions: bool, verbosity: int) -> None:
+        """
+        Extends TextTestResult.__init__ and adds additional attributes to keep track
+        of successes and additional result information.
+        """
+        super().__init__(stream, descriptions, verbosity)
+        self.results = []
+        self.successes = []
+
+    @staticmethod
+    def _autotest_test_name(test):
+        doc = test._testMethodDoc
+        if doc:
+            return f" ({doc})"
+        return ""
+
+    def addSuccess(self, test: unittest.TestCase) -> None:
+        """
+        Record that a test passed.
+        """
+        self.results.append(
+            {
+                "test_name": self._autotest_test_name(test),
+                "output": "",
+                "marks_earned": 1,
+                "marks_total": 1,
+                "status": "pass",
+            }
+        )
+        self.successes.append(test)
+
+    def addFailure(
+        self,
+        test: unittest.TestCase,
+        err: Tuple[Optional[Type[BaseException]], Optional[BaseException], Optional[TracebackType]],
+    ) -> None:
+        """
+        Record that a test failed.
+        """
+        super().addFailure(test, err)
+        self.results.append(
+            {
+                "test_name": self._autotest_test_name(test),
+                "output": self.failures[-1][-1],
+                "marks_earned": 0,
+                "marks_total": 1,
+                "status": "fail",
+            }
+        )
+
+    def addError(
+        self,
+        test: unittest.TestCase,
+        err: Tuple[Optional[Type[BaseException]], Optional[BaseException], Optional[TracebackType]],
+    ) -> None:
+        """
+        Record that a test failed with an error.
+        """
+        super().addError(test, err)
+        self.results.append(
+            {
+                "test_name": self._autotest_test_name(test),
+                "output": self.failures[-1][-1],
+                "marks_earned": 0,
+                "marks_total": 1,
+                "status": "error",
+            }
+        )
+
+
+class PytestPlugin:
+    """
+    Pytest plugin to collect and parse test results as well
+    as any errors during the test collection process.
+    """
+
+    def __init__(self) -> None:
+        """
+        Initialize a pytest plugin for collecting results
+        """
+        self.results = []
+
+    @pytest.hookimpl(hookwrapper=True, tryfirst=True)
+    def pytest_runtest_makereport(self, item, call):
+        """
+        Implement a pytest hook that is run when reporting the
+        results of a given test item.
+
+        Records the results of each test in the self.results
+        attribute.
+
+        See pytest documentation for a description of the parameter
+        types and the return value.
+        """
+        outcome = yield
+        rep = outcome.get_result()
+        if rep.failed or item.nodeid not in self.results:
+            doc = item.obj.__doc__ or ""
+            if doc:
+                doc = f" ({doc})"
+            self.results.append(
+                {
+                    "test_name": item.nodeid + doc,
+                    "output": str(rep.longrepr) if rep.failed else "",
+                    "marks_earned": 0 if rep.failed else 1,
+                    "marks_total": 1,
+                    "status": "fail" if rep.failed else "pass",
+                }
+            )
+        return rep
+
+    def pytest_collectreport(self, report):
+        """
+        Implement a pytest hook that is run after the collector has
+        finished collecting all tests.
+
+        Records a test failure in the self.results attribute if the
+        collection step failed.
+
+        See pytest documentation for a description of the parameter
+        types and the return value.
+        """
+        if report.failed:
+            self.results.append(
+                {
+                    "test_name": report.nodeid,
+                    "output": str(report.longrepr),
+                    "marks_earned": 0,
+                    "marks_total": 1,
+                    "status": "error",
+                }
+            )
+
+
+def _load_unittest_tests(test_file: str) -> unittest.TestSuite:
+    """
+    Discover unittest tests in test_file and return
+    a unittest.TestSuite that contains these tests
+    """
+    test_loader = unittest.defaultTestLoader
+    test_file_dir = os.path.dirname(test_file)
+    discovered_tests = test_loader.discover(test_file_dir, test_file)
+    return unittest.TestSuite(discovered_tests)
+
+
+def _run_unittest_tests(test_file: str, test_data: Dict) -> List[Dict]:
+    """
+    Run unittest tests in test_file and return the results
+    of these tests
+    """
+    test_suite = _load_unittest_tests(test_file)
+    with open(os.devnull, "w") as nullstream:
+        test_runner = unittest.TextTestRunner(
+            verbosity=test_data["output_verbosity"],
+            stream=nullstream,
+            resultclass=TextTestResults,
+        )
+        test_result = test_runner.run(test_suite)
+    return test_result.results
+
+
+def _run_pytest_tests(test_file: str, test_data: Dict) -> List[Dict]:
+    """
+    Run unittest tests in test_file and return the results
+    of these tests
+    """
+    with open(os.devnull, "w") as nullstream:
+        try:
+            sys.stdout = nullstream
+            verbosity = test_data["output_verbosity"]
+            plugin = PytestPlugin()
+            pytest.main([test_file, f"--tb={verbosity}"], plugins=[plugin])
+            return plugin.results
+        finally:
+            sys.stdout = sys.__stdout__
+
+
+def run(settings):
+    """
+    Run all tests indicated by settings
+    """
+    test_data = settings["test_data"]
+    for test_file in test_data["script_files"]:
+        if test_data["tester"] == "unittest":
+            results = _run_unittest_tests(test_file, test_data)
+        else:
+            results = _run_pytest_tests(test_file, test_data)
+        for res in results:
+            print(json.dumps(res), flush=True)
+
+
+if __name__ == "__main__":
+    run(json.loads(sys.stdin.read()))

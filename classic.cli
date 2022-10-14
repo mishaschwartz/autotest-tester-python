@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+
+SUPPORTED_VERSIONS='3.7 3.8 3.9 3.10'
+
+install() {
+  installed=
+  for v in $SUPPORTED_VERSIONS; do
+    which "python${v}" &> /dev/null && installed=t
+  done
+  if [ -z "${installed}" ]; then
+    echo "No valid python version found in the PATH." 1>&2
+    echo "Please try again after installing one of python versions: ${SUPPORTED_VERSIONS}" 1>&2
+    exit 1
+  fi
+}
+
+settings() {
+  installed=
+  default=
+  for v in $SUPPORTED_VERSIONS; do
+    if which "python${v}" &> /dev/null; then
+      installed="${installed}, $v"
+      default=$v
+    fi
+  done
+  sed -e "s/\"\$PYTHON_VERSIONS\$\"/${installed}/" -e "s/\"\$DEFAULT_PYTHON_VERSION\$\"/${default}/" "$(dirname "$0")/schema.json"
+}
+
+create_environment() {
+  version=$2
+  requirements=$3
+  env_dir=$4
+  "python${version}" -m venv --clear "$env_dir" 1>&2 || exit 1
+  # shellcheck disable=SC2086
+  "${env_dir}/bin/python3" -m pip install -r "$(dirname "$0")/requirements.txt" $requirements 1>&2 || exit 1
+  cmd="${env_dir}/bin/python3 $(readlink -f "$(dirname "$0")/tester")"
+  echo '{"COMMAND": "_cmd_"}' | sed "s:_cmd_:${cmd}:"
+}
+
+[ "$1" = "install" ] && install
+[ "$1" = "settings" ] && settings
+[ "$1" = "create_environment" ] && create_environment "$@"
