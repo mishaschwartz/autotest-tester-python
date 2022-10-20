@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
 
+"""
+Autotest tester: python
+"""
+
 import os
 import unittest
 import json
@@ -12,7 +16,7 @@ import sys
 class TextTestResults(unittest.TextTestResult):
     """
     Custom unittest.TextTestResult that saves results as
-    a hash to self.results
+    a hash to `self.results`
     """
 
     def __init__(self, stream: TextIO, descriptions: bool, verbosity: int) -> None:
@@ -25,11 +29,15 @@ class TextTestResults(unittest.TextTestResult):
         self.successes = []
 
     @staticmethod
-    def _autotest_test_name(test):
+    def _autotest_test_name(test: unittest.TestCase) -> str:
+        """
+        Return the name of the test. Append the docstring of the test function if it exists.
+        """
+        # noinspection PyProtectedMember
         doc = test._testMethodDoc
         if doc:
-            return f" ({doc})"
-        return ""
+            return f"{test.id()} ({doc})"
+        return test.id()
 
     def addSuccess(self, test: unittest.TestCase) -> None:
         """
@@ -98,12 +106,14 @@ class PytestPlugin:
         self.results = []
 
     @pytest.hookimpl(hookwrapper=True, tryfirst=True)
-    def pytest_runtest_makereport(self, item, call):
+    def pytest_runtest_makereport(
+        self, item: pytest.Item, call: Optional[pytest.CallInfo]
+    ) -> Optional[pytest.TestReport]:
         """
         Implement a pytest hook that is run when reporting the
         results of a given test item.
 
-        Records the results of each test in the self.results
+        Records the results of each test in the `self.results`
         attribute.
 
         See pytest documentation for a description of the parameter
@@ -126,12 +136,12 @@ class PytestPlugin:
             )
         return rep
 
-    def pytest_collectreport(self, report):
+    def pytest_collectreport(self, report: pytest.CollectReport) -> None:
         """
         Implement a pytest hook that is run after the collector has
         finished collecting all tests.
 
-        Records a test failure in the self.results attribute if the
+        Records a test failure in the `self.results` attribute if the
         collection step failed.
 
         See pytest documentation for a description of the parameter
@@ -152,7 +162,7 @@ class PytestPlugin:
 def _load_unittest_tests(test_file: str) -> unittest.TestSuite:
     """
     Discover unittest tests in test_file and return
-    a unittest.TestSuite that contains these tests
+    a `unittest.TestSuite` that contains these tests
     """
     test_loader = unittest.defaultTestLoader
     test_file_dir = os.path.dirname(test_file)
@@ -192,7 +202,7 @@ def _run_pytest_tests(test_file: str, test_data: Dict) -> List[Dict]:
             sys.stdout = sys.__stdout__
 
 
-def run(settings):
+def run(settings: Dict) -> None:
     """
     Run all tests indicated by settings
     """
