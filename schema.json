@@ -84,8 +84,8 @@
           "plugins": {
             "$ref": "#/definitions/plugins"
           },
-          "data_volumes": {
-            "$ref": "#/definitions/data_volumes"
+          "data_entries": {
+            "$ref": "#/definitions/data_entries"
           }
         },
         "dependencies": {
