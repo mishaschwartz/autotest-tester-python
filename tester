@@ -217,4 +217,4 @@ def run(settings: Dict) -> None:
 
 
 if __name__ == "__main__":
-    run(json.loads(sys.stdin.read()))
+    run(json.loads(sys.argv[1]))

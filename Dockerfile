@@ -14,6 +14,8 @@ RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r /tmp/requirements.txt && \
     rm /tmp/requirements.txt
 
-RUN mkdir /data
+RUN mkdir /data /workspace
+
+WORKDIR /workspace
 
 COPY --chmod=0744 ./tester /tester
