@@ -8,3 +8,5 @@ settings() {
 }
 
 [ "$1" = "settings" ] && settings
+
+exit 0

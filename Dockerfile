@@ -1,7 +1,6 @@
 ARG VERSION
-ARG REQUIREMENTS
 
-FROM python:${VERSION}
+FROM python:${VERSION}-slim
 
 ARG REQUIREMENTS
 
@@ -18,4 +17,6 @@ RUN mkdir /data /workspace
 
 WORKDIR /workspace
 
-COPY --chmod=0744 ./tester /tester
+COPY ./entrypoint.sh /entrypoint.sh
+
+COPY ./tester /tester

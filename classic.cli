@@ -19,10 +19,12 @@ settings() {
   default=
   for v in $SUPPORTED_VERSIONS; do
     if which "python${v}" &> /dev/null; then
-      installed="${installed}, $v"
+      installed="${installed} $v,"
       default=$v
     fi
   done
+  # shellcheck disable=SC2001
+  installed=$(echo "$installed" | sed 's/,$//')
   sed -e "s/\"\$PYTHON_VERSIONS\$\"/${installed}/" -e "s/\"\$DEFAULT_PYTHON_VERSION\$\"/${default}/" "$(dirname "$0")/schema.json"
 }
 
@@ -40,3 +42,5 @@ create_environment() {
 [ "$1" = "install" ] && install
 [ "$1" = "settings" ] && settings
 [ "$1" = "create_environment" ] && create_environment "$@"
+
+exit 0

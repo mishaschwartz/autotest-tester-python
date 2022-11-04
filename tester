@@ -7,7 +7,7 @@ Autotest tester: python
 import os
 import unittest
 import json
-from typing import TextIO, Tuple, Optional, Type, Dict, List
+from typing import TextIO, Tuple, Optional, Type, Dict, Iterable
 from types import TracebackType
 import pytest
 import sys
@@ -45,7 +45,7 @@ class TextTestResults(unittest.TextTestResult):
         """
         self.results.append(
             {
-                "test_name": self._autotest_test_name(test),
+                "name": self._autotest_test_name(test),
                 "output": "",
                 "marks_earned": 1,
                 "marks_total": 1,
@@ -65,7 +65,7 @@ class TextTestResults(unittest.TextTestResult):
         super().addFailure(test, err)
         self.results.append(
             {
-                "test_name": self._autotest_test_name(test),
+                "name": self._autotest_test_name(test),
                 "output": self.failures[-1][-1],
                 "marks_earned": 0,
                 "marks_total": 1,
@@ -84,8 +84,8 @@ class TextTestResults(unittest.TextTestResult):
         super().addError(test, err)
         self.results.append(
             {
-                "test_name": self._autotest_test_name(test),
-                "output": self.failures[-1][-1],
+                "name": self._autotest_test_name(test),
+                "output": self.errors[-1][-1],
                 "marks_earned": 0,
                 "marks_total": 1,
                 "status": "error",
@@ -103,7 +103,7 @@ class PytestPlugin:
         """
         Initialize a pytest plugin for collecting results
         """
-        self.results = []
+        self.results = {}
 
     @pytest.hookimpl(hookwrapper=True, tryfirst=True)
     def pytest_runtest_makereport(
@@ -118,23 +118,30 @@ class PytestPlugin:
 
         See pytest documentation for a description of the parameter
         types and the return value.
+
+        Note that this hook is triggered for the setup, call, and
+        teardown steps of each test.
         """
         outcome = yield
-        rep = outcome.get_result()
-        if rep.failed or item.nodeid not in self.results:
+        result = outcome.get_result()
+        if item.nodeid not in self.results:
             doc = item.obj.__doc__ or ""
             if doc:
                 doc = f" ({doc})"
-            self.results.append(
-                {
-                    "test_name": item.nodeid + doc,
-                    "output": str(rep.longrepr) if rep.failed else "",
-                    "marks_earned": 0 if rep.failed else 1,
+
+            self.results[item.nodeid] = {
+                    "name": item.nodeid + doc,
+                    "output": "",
+                    "marks_earned": 1,
                     "marks_total": 1,
-                    "status": "fail" if rep.failed else "pass",
+                    "status": "pass"
                 }
-            )
-        return rep
+        self.results[item.nodeid]["time"] = int(result.duration * 1000)
+        if result.failed:
+            self.results[item.nodeid]["output"] = str(result.longrepr)
+            self.results[item.nodeid]["marks_earned"] = 0
+            self.results[item.nodeid]["status"] = "fail"
+        return result
 
     def pytest_collectreport(self, report: pytest.CollectReport) -> None:
         """
@@ -148,15 +155,13 @@ class PytestPlugin:
         types and the return value.
         """
         if report.failed:
-            self.results.append(
-                {
-                    "test_name": report.nodeid,
+            self.results[report.nodeid] = {
+                    "name": report.nodeid,
                     "output": str(report.longrepr),
                     "marks_earned": 0,
                     "marks_total": 1,
                     "status": "error",
                 }
-            )
 
 
 def _load_unittest_tests(test_file: str) -> unittest.TestSuite:
@@ -170,7 +175,7 @@ def _load_unittest_tests(test_file: str) -> unittest.TestSuite:
     return unittest.TestSuite(discovered_tests)
 
 
-def _run_unittest_tests(test_file: str, test_data: Dict) -> List[Dict]:
+def _run_unittest_tests(test_file: str, test_data: Dict) -> Iterable[Dict]:
     """
     Run unittest tests in test_file and return the results
     of these tests
@@ -186,7 +191,7 @@ def _run_unittest_tests(test_file: str, test_data: Dict) -> List[Dict]:
     return test_result.results
 
 
-def _run_pytest_tests(test_file: str, test_data: Dict) -> List[Dict]:
+def _run_pytest_tests(test_file: str, test_data: Dict) -> Iterable[Dict]:
     """
     Run unittest tests in test_file and return the results
     of these tests
@@ -197,7 +202,7 @@ def _run_pytest_tests(test_file: str, test_data: Dict) -> List[Dict]:
             verbosity = test_data["output_verbosity"]
             plugin = PytestPlugin()
             pytest.main([test_file, f"--tb={verbosity}"], plugins=[plugin])
-            return plugin.results
+            return plugin.results.values()
         finally:
             sys.stdout = sys.__stdout__
 

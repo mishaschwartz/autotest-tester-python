@@ -4,3 +4,4 @@
 # except ...
 !tester
 !requirements.txt
+!entrypoint.sh

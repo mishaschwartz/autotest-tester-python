@@ -17,7 +17,7 @@
       "properties": {
         "version": {
           "title": "Python version",
-          "type": "string",
+          "type": "number",
           "enum": ["$PYTHON_VERSIONS$"],
           "default": "$DEFAULT_PYTHON_VERSION$"
         },
@@ -49,7 +49,7 @@
             },
             "uniqueItems": true
           },
-          "category": {
+          "categories": {
             "title": "Category",
             "type": "array",
             "items": {
